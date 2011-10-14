@@ -2,6 +2,13 @@
 
 Browsable dependency graph of Clojure projects. See it live here: http://clojuresphere.herokuapp.com/
 
+## Deploying to Stackato
+
+```bash
+$ lein deps
+$ stackato push -n
+```
+
 ## Caveats
 
 * I intentionally built this with the false-but-useful assumption that projects are uniquely identified by their artifact ID, to make the interface simple and understandable. You can still find group IDs for projects with overlapping artifact IDs.

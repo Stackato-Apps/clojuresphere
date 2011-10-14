@@ -32,7 +32,7 @@
              wrap-params))
 
 (defn -main []
-  (let [port (Integer/parseInt (get (System/getenv) "PORT" "9999"))]
+  (let [port (Integer/parseInt (get (System/getenv) "VCAP_APP_PORT" "9999"))]
     (run-jetty app {:port port :join? false})))
 
 ;(run-jetty #'app {:port 8080 :join? false})
