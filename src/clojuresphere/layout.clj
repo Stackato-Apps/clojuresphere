@@ -1,12 +1,12 @@
 (ns clojuresphere.layout
-  (:use [clojuresphere.util :only [url-encode qualify-name maven-coord lein-coord
-                                   parse-int date->days-ago *req*]]
-        [clojure.string :only [capitalize join]]
-        [hiccup.page-helpers :only [html5 include-js include-css
-                                    javascript-tag link-to url]]
-        [hiccup.form-helpers :only [form-to submit-button]]
+  (:use [clojuresphere.util :only [url-encode parse-int date->days-ago *req*]]
+        [clojure.string :only [capitalize join split]]
+        [hiccup.page :only [html5 include-js include-css]]
+        [hiccup.element :only [link-to javascript-tag link-to]]
+        [hiccup.form :only [form-to submit-button]]
+        [hiccup.util :only [url]]
         [hiccup.core :only [h html]])
-  (:require [clojuresphere.project-model :as project]))
+  (:require [clojuresphere.project-model :as proj]))
 
 (def site-name "ClojureSphere")
 
@@ -18,9 +18,10 @@
     (form-to [:get "/"]
              [:input {:name "query" :size 30 :id "query"
                       :value (get-in *req* [:query-params "query"])
-                      :type "search" :placeholder "Search"}] " "
+                      :type "text" :placeholder "Search"}] " "
                       (submit-button "Go"))
     [:div#links
+     [:span#api-link (link-to "/api" "API")] " "
      [:span#github-link (link-to "http://github.com/jkk/clojuresphere" "GitHub")] " "
      [:span#built-by "Built by "
       (link-to "http://jkkramer.com" "Justin Kramer") " - "
@@ -51,129 +52,152 @@
                     "/js/history.js"
                     "/js/main.js")]))))
 
-(defn coord-url [coord]
-  (if (or (keyword? coord) (string? coord))
-    (str "/" (name coord))
-    (let [[gid aid ver] (maven-coord coord)]
-      (str "/" (url-encode aid)
-           "/" (url-encode gid)
-           "/" (url-encode (or ver ""))))))
+(defn get-github-url [props]
+  (when-let [gh (:github props)]
+    (let [owner (if (map? (:owner gh))
+                  (-> gh :owner :login)
+                  (:owner gh))]
+      (str "https://github.com/" owner "/" (:name gh)))))
 
-(defn render-coord [coord]
-  (if (or (keyword? coord) (string? coord))
-    (name coord)
-    (let [[name ver] (apply lein-coord coord)]
-      (str name " " ver))))
-
-(defn project-overview [node]
-  [:div.overview
-   [:p.description (:description node)]
-   [:div.tidbits
-    (when (:homepage node)
-      [:p.homepage (link-to (:homepage node) "Homepage")])
-    (when (:github-url node)
-      [:p.github (link-to (:github-url node) "GitHub")])
-    (when (:clojars-url node)
-      [:p.clojars (link-to (:clojars-url node) "Clojars")])
-    (when (:watchers node)
-      [:p.watchers [:span.label "Watchers"] " " [:span.value (:watchers node)]])
-    (when (:forks node)
-      [:p.forks [:span.label "Forks"] " " [:span.value (:forks node)]])
-    (when (and (:updated node) (not (zero? (:updated node))))
-      [:p.updated
-       [:span.label "Updated"] " "
-       [:span.value (date->days-ago (:updated node)) " days ago"]])
-    [:div.clear]]])
+(defn project-overview [gid aid props]
+  (let [github-url (get-github-url props)
+        pid (if (or (empty? gid) (= gid aid))
+              aid (str gid "/" aid))
+        desc (or (:description props)
+                 (-> props :clojars :description)
+                 (-> props :github :description))]
+    [:div.overview
+     (when-not (empty? desc)
+       [:p.description desc])
+     [:p.latest-versions
+      (when (:stable props)
+        [:span.ver.stable
+         [:span.label "Stable"] " "
+         [:span.version (str "[" pid " \"" (:stable props) "\"]")]])
+      " "
+      [:span.ver.latest
+       [:span.label "Latest"] " "
+       [:span.version (str "[" pid " \"" (:latest props) "\"]")]]]
+     [:div.tidbits
+      (when-let [homepage (or (-> props :clojars :homepage not-empty)
+                              (-> props :github :homepage not-empty))]
+        (when (not= homepage github-url)
+          [:p.homepage (link-to homepage "Homepage")]))
+      (when github-url
+        [:p.github (link-to github-url "GitHub")])
+      (when-let [clojars-url (-> props :clojars :url)]
+        [:p.clojars (link-to clojars-url "Clojars")])
+      (when (:watchers props)
+        [:p.watchers [:span.label "Watchers"] " " [:span.value (:watchers props)]])
+      (when (-> props :github :forks)
+        [:p.forks [:span.label "Forks"] " " [:span.value (-> props :github :forks)]])
+      (when (:downloads props)
+        [:p.downloads [:span.label "Clojars Downloads"] " " [:span.value (:downloads props)]])
+      (when (and (:updated props) (not (zero? (:updated props))))
+        [:p.updated
+         [:span.label "Updated"] " "
+         [:span.value (date->days-ago (:updated props)) " days ago"]])
+      [:div.clear]]]))
 
 (defn project-dep-list [deps]
   (if (zero? (count deps))
     [:p.none "None"]
-    (let [dep1 (first deps)
-          ul-tag (if (or (keyword? dep1) (string? dep1))
-                   :ul.dep-list
-                   :ul.dep-list.ver)]
-      [ul-tag
-       (for [aid deps]
-         [:li (link-to (coord-url aid) (h (render-coord aid)))])
-       [:span.clear]])))
+    [:ul.dep-list
+     ;; straight hiccup is slow for large lists
+     (apply str (mapcat (fn [[dname dver]]
+                          ["<li>"
+                           "<a href='/" dname "'><span class='name'>" (name dname)
+                           "</span> <span class='ver'>" dver "</span></a></li>"])
+                        deps))
+     [:span.clear]]))
 
-(defn project-version-list [versions]
+(defn project-version-list [pid props versions]
   (if (zero? (count versions))
     [:p.none "None"]
     [:ul.version-list
-     (for [[[vname vver :as coord] vinfo] versions]
+     (for [ver versions]
        [:li
         (link-to
-         (coord-url coord)
+         (str "/" pid "/" (url-encode ver))
          [:span.version
-          [:span.vver (h (or vver "[none]"))]
-          [:span.vname (h (str vname))]]
-         [:span.count (count (vinfo :dependents))])])
+          [:span.vver ver]]
+         [:span.count (count (get-in props [:versions ver :dependents]))])])
      [:span.clear]]))
 
 (defn project-detail [pid]
-  (let [pid (-> pid name keyword)
-        node (project/graph pid)]
-    (when node
-      (page
-       (name pid)
-       [:div.project-detail
-        (project-overview node)
-        [:div.dependencies
-         [:h3 "Dependencies (current and past) "
-          [:span.count (count (:dependencies node))]]
-         (project-dep-list (:dependencies node))]
-        (let [versions (project/most-used-versions pid)]
-          [:div.versions
-           [:h3 "Versions " [:span.count (count versions)]]
-           (project-version-list versions)])
-        [:div.dependents
-         [:h3 "Dependents (current and past) "
-          [:span.count (count (:dependents node))]]
-         (project-dep-list (sort (:dependents node)))]]))))
+  (let [props (proj/graph pid)]
+    (when props
+      (let [gid (namespace pid)
+            aid (name pid)
+            latest (:latest props)
+            deps (get-in props [:versions latest :dependencies])]
+        (page
+         aid
+         [:div.project-detail
+          (project-overview gid aid props)
+          [:div.dependencies
+           [:h3 "Latest Dependencies "
+            [:span.count (count deps)]]
+           (project-dep-list deps)]
+          (let [versions (proj/sort-versions (keys (:versions props)))]
+            [:div.versions
+             [:h3 "Versions " [:span.count (count versions)]]
+             (project-version-list pid props versions)])
+          [:div.dependents
+           [:h3 "Dependents (latest versions only)"
+            [:span.count (-> props :dependent-counts :latest)]]
+           (if (= 'org.clojure/clojure pid)
+             [:p.none "Everything!"]
+             (project-dep-list (proj/get-dependents props)))]])))))
 
 (defn project-version-detail [gid aid ver]
-  (let [coord (lein-coord gid aid ver)
-        aid (-> aid name keyword)
-        node (get-in project/graph [aid :versions coord])]
-    (when node
+  (let [coord (proj/lein-coord gid aid ver)
+        pid (symbol gid aid)
+        props (get-in proj/graph [pid :versions ver])]
+    (when props
       (page
-       (render-coord coord)
+       (str gid "/" aid " " ver)
        [:div.project-detail.version-detail
-        (project-overview
-         (assoc node
-           :description (html "Main project: "
-                              [:a {:href (str "/" (url-encode (name aid)))
-                                   :id "project-link"}
-                               (name aid)])))
+        [:div.overview
+         [:p.description
+          "Main project: "
+          [:a {:href (str "/" pid)
+               :id "project-link"}
+           pid]]]
         [:div.dependencies
-         [:h3 "Dependencies " [:span.count (count (:dependencies node))]]
-         (project-dep-list (:dependencies node))]
+         [:h3 "Dependencies for this version "
+          [:span.count (count (:dependencies props))]]
+         (project-dep-list (:dependencies props))]
         [:div.dependents
-         [:h3 "Dependents " [:span.count (count (:dependents node))]]
-         (project-dep-list (sort (:dependents node)))]]))))
+         [:h3 "Dependents on this version "
+          [:span.count (count (:dependents props))]]
+         (project-dep-list (sort (:dependents props)))]]))))
 
-(defn project-list [pids]
+(defn project-list [pids & [sort-key]]
   [:ul.project-list
    (for [pid pids
-         :let [pid (-> pid name keyword)
-               node (or (project/graph pid) {})]]
+         :let [props (or (proj/graph pid) {})]]
      [:li
       (link-to
-       (name pid)
+       (str pid)
        [:span.name (h (name pid))]
+       #_[:span.stat.score
+        [:span.label "Score"] " " [:span.value (proj/score-project props)]]
        [:span.stat.dep-count
-        [:span.label "Used by"] " " [:span.value (count (:dependents node))]]
-       (when (:watchers node)
+        [:span.label "Used by"] " " [:span.value (-> props :dependent-counts :all)]]
+       (when (:watchers props)
          [:span.stat.watchers
-          [:span.label "Watchers"] " "[:span.value (:watchers node)]])
-       (when (and (:updated node) (not (zero? (:updated node))))
+          [:span.label "Watchers"] " " [:span.value (:watchers props)]])
+       (when (:downloads props)
+         [:span.stat.downloads
+          [:span.label "Downloads"] " " [:span.value (:downloads props)]])
+       #_(when (and (:updated props) (not (zero? (:updated props))))
          [:span.stat.updated
-          [:span.label "Updated"] " " [:span.value (date->days-ago (:updated node))
+          [:span.label "Updated"] " " [:span.value (date->days-ago (:updated props))
                                        [:span.days-ago-label " days ago"]]]))])
    [:span.clear]])
 
-(def per-page 30)
+(def per-page 90)
 
 (defn neg-guard [x]
   (if (neg? x) 0 x))
@@ -197,17 +221,17 @@
       [next-tag {:href next-url} "Next"]
       [prev-tag {:href prev-url} "Previous"]]]))
 
-(defn paginated-list [pids offset]
+(defn paginated-list [pids offset & [sort-key]]
   (let [window (take per-page (drop offset pids))]
     (if (empty? window)
       [:p.none "No projects found"]
       (paginate
-       (project-list window)
+       (project-list window sort-key)
        offset
        (count window)))))
 
 (defn projects-per-quarter-chart []
-  (let [yrange (range project/first-year (inc project/last-year))]
+  (let [yrange (range proj/first-year (inc proj/last-year))]
     [:img#projects-per-quarter
      {:src (url "https://chart.googleapis.com/chart"
                 {:cht "lc"
@@ -216,8 +240,8 @@
                  :chxl (str "0:|" (join "|" yrange) "|")
                  :chxp (str "0," (join "," (map (partial * 4)
                                                 (range (count yrange)))))
-                 :chxr (str "0,0," (count project/quarterly-counts))
-                 :chd (str "t:" (join "," project/quarterly-counts))
+                 :chxr (str "0,0," (count proj/quarterly-counts))
+                 :chd (str "t:" (join "," proj/quarterly-counts))
                  :chco "449966"
                  :chm "B,eeffeebb,0,0,0"
                  :chds "a"})}]))
@@ -227,26 +251,26 @@
    [:h3 "Stats"]
    [:dl
     [:dt "Projects"]
-    [:dd project/project-count]
+    [:dd proj/project-count]
     [:dt "GitHub projects"]
-    [:dd project/github-count]
+    [:dd proj/github-count]
     [:dt "Clojars projects"]
-    [:dd project/clojars-count]
+    [:dd proj/clojars-count]
     [:dt "Projects per quarter (GitHub only)"]
     [:dd (projects-per-quarter-chart)]
     [:dt "Last indexed"]
-    [:dd#last-indexed (str project/last-updated)]]])
+    [:dd#last-indexed (str proj/last-updated)]]])
 
 (defn projects [query sort offset]
   (page
    nil
-   (let [sort (or sort "dependents")
+   (let [sort (or sort "score")
          random? (= "random" sort)
          pids (cond
-               (seq query) (project/sort-pids (project/find-pids query) sort)
-               random?     (repeatedly per-page project/random)
-               :else       (or (project/sorted-pids (keyword sort))
-                               (project/sorted-pids :dependents)))
+               (seq query) (proj/sort-pids (proj/find-pids query) sort)
+               random?     (repeatedly per-page proj/random)
+               :else       (or (proj/sorted-pids (keyword sort))
+                               (proj/sorted-pids :dependents)))
          title (if (seq query)
                  (str "Search: " (h query))
                  "Projects")]
@@ -255,10 +279,11 @@
        [:h2 title]
        [:div.sort-links
         "Sort by"
-        (for [s ["dependents" "watchers" "updated" "random"]]
+        (for [s ["score" "dependents" "watchers" "downloads" "updated" #_"random"]]
           (let [a-tag (if (= s sort) :a.active :a)]
-            [a-tag {:href (url "/" {:sort s :query query})} (capitalize s)]))]
-       (paginated-list pids (if random? 0 offset))]
+            [a-tag {:href (url "/" {:sort s :query (str query)})}
+             (capitalize s)]))]
+       (paginated-list pids (if random? 0 offset) (keyword sort))]
       (stats)
       [:div.clear]])))
 

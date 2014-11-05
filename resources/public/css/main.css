@@ -296,13 +296,14 @@ table { border-collapse: collapse; border-spacing: 0; }
     position: absolute;
     top: 50px;
     right: 1em;
+    font-size: 1.1em;
 }
 #header .inner form input[type=submit] {
     background: #777;
     color: #fff;
     border: none;
     border-radius: 5px;
-    padding: 4px 10px;
+    padding: 6px 10px;
 }
 #header .inner form input[type=submit]:hover {
     background: #888;
@@ -310,7 +311,11 @@ table { border-collapse: collapse; border-spacing: 0; }
 #query {
     border: none;
     border-radius: 10px;
-    padding: 4px 10px;
+    width: 255px;
+    padding: 6px 10px;
+}
+#query:focus {
+    outline: none;
 }
 #header h1 {
     margin: 0;
@@ -338,7 +343,7 @@ table { border-collapse: collapse; border-spacing: 0; }
     border-radius: 0.5em;
     font-weight: normal;
     border: 1px solid #e8e8e8;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid #bbb;
     background: #ddd;
     background: #ddd -webkit-gradient(linear, left top, 0 50, from(#f4f4f4), to(#ddd)) no-repeat;
     background: -moz-linear-gradient(top,#f4f4f4,#ddd 50px);
@@ -357,7 +362,7 @@ table { border-collapse: collapse; border-spacing: 0; }
     border-radius: 0.5em;
     font-weight: normal;
     border: 1px solid #e8e8e8;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid #bbb;
     background: #ddd;
     background: #ddd -webkit-gradient(linear, left top, 0 40, from(#f4f4f4), to(#ddd)) no-repeat;
     background: -moz-linear-gradient(top,#f4f4f4,#ddd 40px);
@@ -382,6 +387,7 @@ table { border-collapse: collapse; border-spacing: 0; }
 #header #links a {
     color: #ccc;
 }
+#header #links #api-link,
 #header #links #github-link {
     margin: 0 10px 0 0;
     padding: 0 10px 0 0;
@@ -529,10 +535,37 @@ ul.project-list li .stat .value {
 .project-detail .description {
     font-size: 1.1em;
     margin: 0;
-    padding: 1em 0 1.5em 0;
+    margin: 1em 0 1em 0;
+    padding: 0 0 1em 0;
+    border-bottom: 1px solid #ddd;
 }
 .project-detail.version-detail .description {
-    padding: 1em 0 0.5em 0;
+    border: none;
+    padding: 0;
+}
+.project-detail .latest-versions {
+    margin: 1em 0 1em 0;
+    font-size: 1.1em;
+}
+.project-detail .latest-versions .ver {
+    display: block;
+    width: 45%;
+    margin: 0 0 1em 0;
+    padding: 0 1em 0 1em;
+    float: left;
+}
+.project-detail .latest-versions .ver .label {
+    color: #aaa;
+    display: block;
+    margin: 0 0 0.25em 0;
+}
+.project-detail .latest-versions .ver .version {
+    font-family: monospace;
+}
+.project-detail .tidbits {
+    clear: left;
+    border-top: 1px solid #ddd;
+    padding: 1em 0 0 0;
 }
 .project-detail .tidbits p {
     float: left;
@@ -540,6 +573,7 @@ ul.project-list li .stat .value {
     padding: 0 1em 0 0;
     border-right: 1px solid #ddd;
     color: #aaa;
+    font-size: 1.1em;
 }
 .project-detail .value {
     color: #888;
@@ -572,10 +606,14 @@ ul.dep-list li a {
     border-radius: 5px;
     border-right: 1px solid #ddd;
     border-bottom: 1px solid #ddd;
+    overflow: hidden;
 }
 ul.dep-list li a:hover {
     background: #fff8cc;
     text-decoration: none;
+}
+ul.dep-list li a .ver {
+    color: #bbb;
 }
 ul.dep-list.ver li a {
     width: 420px;
@@ -588,12 +626,14 @@ ul.version-list {
 ul.version-list li a {
     float: left;
     background: #fff;
-    width: 423px;
+    width: 198px;
     padding: 5px 10px;
     margin: 0 5px 0.25em 0;
     border-radius: 5px;
     border-right: 1px solid #ddd;
     border-bottom: 1px solid #ddd;
+    overflow: hidden;
+    height: 1.3em;
 }
 ul.version-list li a:hover {
     background: #fff8cc;
@@ -607,7 +647,7 @@ ul.version-list li .version {
 }
 ul.version-list li .count {
     float: right;
-    color: #888;
+    color: #aaa;
 }
 ul.version-list .version .vname {
     color: #888;
@@ -646,4 +686,68 @@ a.button:hover {
 a.button.inactive:hover {
     background: #999;
     color: #ddd;
+}
+#api-overview dl {
+    margin: 0;
+    padding: 0;
+}
+#api-overview dl dt {
+    margin: 0 1% 1em 1%;
+    padding: 0;
+    width: 13%;
+    float: left;
+    font-weight: bold;
+    color: #666;
+}
+#api-overview dl dd {
+    margin: 0 0 1em 0;
+    padding: 0;
+    width: 85%;
+    float: left;
+}
+#api-overview dl dl dt, #api-overview dl dl dd {
+    margin: 0;
+    border-bottom: 1px solid #ddd;
+    padding: 0.3em 0.1em;
+    color: #222;
+}
+#api-overview dl dd p {
+    margin: 0 0 1em 0;
+}
+#api-overview code {
+    font-weight: bold;
+}
+#api-overview pre {
+    margin: 0 0 1em 0;
+    border: 1px solid #ddd;
+    border-top: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 0.5em;
+    max-height: 200px;
+    overflow: auto;
+    background: #fcfcfc;
+}
+#api-overview .endpoint pre {
+    margin: 0;
+}
+#api-overview pre code {
+    color: #800;
+    font-weight: normal;
+}
+#api-overview pre code a:link, #api-overview pre code a:visited {
+    color: #800;
+}
+#api-overview h3 {
+    background: none;
+    padding: 0 0 0.25em 0;
+    border: none;
+    font-weight: bold;
+    border-bottom: 2px solid #ddd;
+    border-radius: 0;
+    font-size: 1.4em;
+    margin: 1.5em 0;
+}
+#api-overview dl .none {
+    margin: 0;
+    padding: 0;
 }

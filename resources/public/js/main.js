@@ -1,5 +1,7 @@
 $(function() {
 
+    $("#query").focus().select();
+/*
     var History = window.History;
 
     if (!History.enabled)
@@ -70,4 +72,5 @@ $(function() {
             });
         }
     });
+*/
 });
