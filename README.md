@@ -5,7 +5,6 @@ Browsable dependency graph of Clojure projects. See it live here: http://www.clo
 ## Deploying to Stackato
 
 ```bash
-$ lein deps
 $ stackato push -n
 ```
 
