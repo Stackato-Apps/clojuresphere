@@ -2,7 +2,7 @@
 
 Browsable dependency graph of Clojure projects. See it live here: http://www.clojuresphere.com/
 
-## Deploying to Stackato
+## Deploying to HPE Helion Stackato
 
 ```bash
 $ stackato push -n
